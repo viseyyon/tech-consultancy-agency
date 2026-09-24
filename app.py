@@ -121,7 +121,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🔍 Analyze Repository",
     "📊 Dashboard",
     "📁 Reports",
-    "🔧 Obsidian Vault",
+    "📚 Knowledge Base",
     "ℹ️ About"
 ])
 
@@ -350,31 +350,152 @@ with tab3:
     else:
         st.warning("📁 Reports directory not found.")
 
-# Tab 4: Obsidian Vault
+# Tab 4: Knowledge Base
 with tab4:
-    st.header("Obsidian Vault Browser")
+    st.header("📚 Knowledge Base")
 
-    vault_path = Path("~/Documents/Obsidian Vault/10-knowledge").expanduser()
+    try:
+        from vault_analyzer import VaultAnalyzer
 
-    if vault_path.exists():
-        st.success(f"✅ Vault found: `{vault_path}`")
+        # Initialize analyzer
+        analyzer = VaultAnalyzer()
 
-        notes = list(vault_path.glob("*.md"))
+        # Get statistics
+        with st.spinner("Scanning vault..."):
+            stats = analyzer.get_stats()
 
-        st.markdown(f"### 📚 {len(notes)} Notes in Knowledge Base")
+        # Display statistics dashboard
+        st.markdown("### 📊 Vault Statistics")
 
-        # Filter
-        search = st.text_input("🔍 Search notes", "")
+        col1, col2, col3, col4 = st.columns(4)
 
-        filtered_notes = [n for n in notes if search.lower() in n.name.lower()] if search else notes
+        with col1:
+            st.metric("Total Notes", stats['total_notes'])
 
-        for note in sorted(filtered_notes, key=lambda x: x.stat().st_mtime, reverse=True)[:20]:
-            with st.expander(f"📝 {note.stem}"):
-                content = note.read_text()
-                st.markdown(content)
-    else:
-        st.warning(f"📁 Vault not found at `{vault_path}`")
-        st.info("💡 For cloud deployment, use Git-based sync or environment variable to configure vault path.")
+        with col2:
+            st.metric("Categories", len(stats['categories']))
+
+        with col3:
+            st.metric("Recent Activity (7d)", stats['recent_activity_7d'])
+
+        with col4:
+            st.metric("Vault Size", f"{stats['total_size_kb']} KB")
+
+        st.markdown("---")
+
+        # Category breakdown
+        st.markdown("### 📁 Categories")
+
+        category_col1, category_col2 = st.columns(2)
+
+        sorted_categories = sorted(stats['categories'].items(), key=lambda x: x[1], reverse=True)
+
+        mid_point = len(sorted_categories) // 2
+
+        with category_col1:
+            for category, count in sorted_categories[:mid_point]:
+                st.markdown(f"**{category.replace('-', ' ').title()}**: {count} notes")
+
+        with category_col2:
+            for category, count in sorted_categories[mid_point:]:
+                st.markdown(f"**{category.replace('-', ' ').title()}**: {count} notes")
+
+        st.markdown("---")
+
+        # Search functionality
+        st.markdown("### 🔍 Search Knowledge Base")
+
+        search_col1, search_col2 = st.columns([3, 1])
+
+        with search_col1:
+            search_query = st.text_input("Search by title, tags, or content", placeholder="Enter keywords...", label_visibility="collapsed")
+
+        with search_col2:
+            category_filter = st.selectbox(
+                "Filter by category",
+                ["All"] + list(stats['categories'].keys()),
+                label_visibility="collapsed"
+            )
+
+        if search_query:
+            category = None if category_filter == "All" else category_filter
+            results = analyzer.search_notes(search_query, category=category)
+
+            st.write(f"Found **{len(results)}** notes")
+
+            for note in results[:20]:
+                with st.expander(f"📝 {note['title']} ({note['category']})"):
+                    col_a, col_b = st.columns(2)
+
+                    with col_a:
+                        st.markdown(f"**Modified**: {note['modified'][:10]}")
+                        st.markdown(f"**Category**: {note['category']}")
+
+                    with col_b:
+                        if 'tags' in note['frontmatter']:
+                            tags = note['frontmatter']['tags']
+                            if isinstance(tags, list):
+                                st.markdown(f"**Tags**: {', '.join(tags[:5])}")
+
+                    if 'url' in note['frontmatter']:
+                        st.markdown(f"**URL**: [{note['frontmatter']['url']}]({note['frontmatter']['url']})")
+
+                    if note['frontmatter']:
+                        with st.expander("View Metadata"):
+                            st.json(note['frontmatter'])
+
+        st.markdown("---")
+
+        # Recent notes
+        st.markdown("### 📝 Recent Notes")
+
+        recent_notes = analyzer.get_recent_notes(15)
+
+        for note in recent_notes:
+            with st.expander(f"{note['title']} - {note['modified'][:10]}"):
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.markdown(f"**Category**: {note['category']}")
+                    st.markdown(f"**Modified**: {note['modified']}")
+                    st.markdown(f"**Size**: {round(note['size'] / 1024, 2)} KB")
+
+                with col2:
+                    if 'tags' in note['frontmatter']:
+                        tags = note['frontmatter']['tags']
+                        if isinstance(tags, list):
+                            st.markdown(f"**Tags**: {', '.join(tags[:5])}")
+
+                # Show frontmatter
+                if note['frontmatter']:
+                    with st.expander("View Metadata"):
+                        st.json(note['frontmatter'])
+
+        st.markdown("---")
+
+        # Category browser
+        st.markdown("### 📂 Browse by Category")
+
+        selected_category = st.selectbox(
+            "Select a category to explore",
+            list(stats['categories'].keys())
+        )
+
+        if selected_category:
+            category_notes = analyzer.get_category_notes(selected_category)
+
+            st.write(f"**{len(category_notes)}** notes in **{selected_category}**")
+
+            for note in category_notes[:10]:
+                with st.expander(f"📄 {note['title']}"):
+                    st.markdown(f"**Modified**: {note['modified']}")
+                    if note['frontmatter']:
+                        st.json(note['frontmatter'])
+
+    except Exception as e:
+        st.error(f"❌ Error loading Knowledge Base: {str(e)}")
+        st.info("💡 Make sure vault_analyzer.py is available and vault path is correct.")
+        st.exception(e)
 
 # Tab 5: About
 with tab5:

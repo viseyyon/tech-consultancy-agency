@@ -9,6 +9,7 @@ Output: Created/updated notes, tech radar entries, cross-references
 
 import json
 import os
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any
@@ -176,6 +177,102 @@ tags: [repositories, index]
         except Exception as e:
             logger.error(f"Repository Index update failed: {e}")
 
+    def git_sync(self, repo_name: str, vault_as_repo: bool = False) -> tuple[bool, str]:
+        """
+        Sync Obsidian vault to GitHub repository
+
+        Args:
+            repo_name: Name of repository (for commit message)
+            vault_as_repo: If True, treat vault itself as git repo (Obsidian Git plugin mode)
+                          If False, sync vault files to separate git repo
+
+        Returns:
+            (success, message)
+        """
+        try:
+            # Determine git directory
+            if vault_as_repo:
+                git_dir = self.vault_path
+            else:
+                # Use parent directory if agency repo
+                git_dir = Path.cwd()
+
+            logger.info(f"Git sync starting in: {git_dir}")
+
+            # Change to git directory
+            original_dir = os.getcwd()
+            os.chdir(git_dir)
+
+            try:
+                # Check if git repo
+                result = subprocess.run(
+                    ['git', 'rev-parse', '--is-inside-work-tree'],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+
+                if result.returncode != 0:
+                    logger.warning(f"Not a git repository: {git_dir}")
+                    return False, "Not a git repository"
+
+                # Stage changes (only vault files if in agency repo)
+                if vault_as_repo:
+                    add_cmd = ['git', 'add', '.']
+                else:
+                    # Add only Obsidian vault related files
+                    add_cmd = ['git', 'add', str(self.vault_path)]
+
+                subprocess.run(add_cmd, timeout=10, check=True)
+
+                # Check if there are changes to commit
+                status_result = subprocess.run(
+                    ['git', 'status', '--porcelain'],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+
+                if not status_result.stdout.strip():
+                    logger.info("No changes to commit")
+                    return True, "No changes"
+
+                # Commit
+                commit_msg = f"Add analysis: {repo_name}"
+                subprocess.run(
+                    ['git', 'commit', '-m', commit_msg],
+                    timeout=10,
+                    check=True,
+                    capture_output=True
+                )
+
+                # Push
+                subprocess.run(
+                    ['git', 'push'],
+                    timeout=30,
+                    check=True,
+                    capture_output=True
+                )
+
+                logger.info(f"✅ Git sync successful: {repo_name}")
+                return True, f"Synced: {repo_name}"
+
+            finally:
+                # Return to original directory
+                os.chdir(original_dir)
+
+        except subprocess.TimeoutExpired:
+            logger.error("Git operation timed out")
+            return False, "Git timeout"
+
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Git command failed: {e}")
+            return False, f"Git error: {e.returncode}"
+
+        except Exception as e:
+            logger.error(f"Git sync failed: {e}")
+            return False, str(e)
+
     def integrate(self, findings: Dict[str, Any]) -> Dict[str, Any]:
         """Main integration method"""
         logger.info("=== Starting Obsidian integration ===")
@@ -195,13 +292,25 @@ tags: [repositories, index]
         # Update index
         self.update_repository_index(findings)
 
+        # Sync to GitHub
+        repo_name = findings['url'].split('/')[-1].replace('.git', '')
+        sync_success, sync_msg = self.git_sync(repo_name, vault_as_repo=False)
+
         logger.info("=== Obsidian integration complete ===")
 
-        return {
+        result = {
             'success': True,
             'note_path': note_path,
             'updates': ['note_created', 'radar_updated', 'index_updated']
         }
+
+        if sync_success:
+            result['updates'].append('github_synced')
+            result['sync_message'] = sync_msg
+        else:
+            result['sync_warning'] = f"GitHub sync failed: {sync_msg}"
+
+        return result
 
 
 def main():
