@@ -20,8 +20,24 @@ logger = logging.getLogger(__name__)
 class VaultAnalyzer:
     """Analyzes Obsidian vault structure and content"""
 
-    def __init__(self, vault_path: str = "~/Documents/Obsidian Vault/10-knowledge"):
-        self.vault_path = Path(vault_path).expanduser()
+    def __init__(self, vault_path: str = None):
+        # Auto-detect vault path based on environment
+        if vault_path is None:
+            # Try local path first
+            local_path = Path("~/Documents/Obsidian Vault/10-knowledge").expanduser()
+            # Try repo-embedded path (for cloud deployment)
+            repo_path = Path("obsidian_vault")
+
+            if local_path.exists():
+                self.vault_path = local_path
+            elif repo_path.exists():
+                self.vault_path = repo_path
+            else:
+                # Default to repo path (will create if needed)
+                self.vault_path = repo_path
+        else:
+            self.vault_path = Path(vault_path).expanduser()
+
         logger.info(f"VaultAnalyzer initialized for: {self.vault_path}")
 
     def extract_frontmatter(self, content: str) -> Dict[str, Any]:
