@@ -49,7 +49,7 @@ authenticator = stauth.Authenticate(
 )
 
 # Login widget
-name, authentication_status, username = authenticator.login('Login', 'main')
+name, authentication_status, username = authenticator.login(location='main', key='Login')
 
 # Handle authentication
 if authentication_status == False:
@@ -61,7 +61,7 @@ elif authentication_status == None:
     st.stop()
 
 # User is authenticated - show logout button
-authenticator.logout('Logout', 'sidebar')
+authenticator.logout(button_name='Logout', location='sidebar', key='Logout')
 st.sidebar.success(f'Welcome **{name}**!')
 
 # Custom CSS
