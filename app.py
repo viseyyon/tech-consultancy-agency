@@ -12,14 +12,17 @@ import os
 from pathlib import Path
 from datetime import datetime
 import time
-import yaml
-from yaml.loader import SafeLoader
 import streamlit_authenticator as stauth
 
-# Import agency components
-from deep_research_agent import DeepResearchAgent, ResearchFindings
-from obsidian_integrator import ObsidianIntegrator
-from consultancy_orchestrator import ConsultancyOrchestrator
+# Import agency components (with error handling for cloud deployment)
+try:
+    from deep_research_agent import DeepResearchAgent, ResearchFindings
+    from obsidian_integrator import ObsidianIntegrator
+    from consultancy_orchestrator import ConsultancyOrchestrator
+    COMPONENTS_AVAILABLE = True
+except Exception as e:
+    COMPONENTS_AVAILABLE = False
+    COMPONENT_ERROR = str(e)
 
 # Page config
 st.set_page_config(
