@@ -1,4 +1,1 @@
-streamlit==1.39.0
-pathlib
-dataclasses
-typing
+streamlit>=1.28.0
