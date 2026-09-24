@@ -44,14 +44,21 @@ credentials = {
 authenticator = stauth.Authenticate(
     credentials,
     'tech_consultancy_app',  # cookie name
-    'viseyyon_secret_key_2026',  # cookie key
+    'jD9_KtcQN39qFInOy6Z0iE_CKha3axgtlpR5VWchMBw',  # 32-byte cookie key (secure)
     30  # cookie expiry days
 )
 
-# Login widget
-name, authentication_status, username = authenticator.login(location='main', key='Login')
+# Login widget - returns tuple or None
+login_result = authenticator.login(location='main', key='Login')
 
-# Handle authentication
+# Handle the result
+if login_result is not None:
+    name, authentication_status, username = login_result
+else:
+    # First render - login widget not yet interacted with
+    name, authentication_status, username = None, None, None
+
+# Handle authentication states
 if authentication_status == False:
     st.error('Username/Password is incorrect')
     st.stop()
