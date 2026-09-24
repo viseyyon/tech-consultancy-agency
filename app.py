@@ -74,8 +74,6 @@ def login():
             else:
                 st.error("Invalid username or password")
 
-    st.info("**Username:** rudram | **Password:** Suren9234!")
-
 def logout():
     """Logout user"""
     st.session_state.authenticated = False
