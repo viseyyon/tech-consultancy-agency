@@ -12,6 +12,9 @@ import os
 from pathlib import Path
 from datetime import datetime
 import time
+import yaml
+from yaml.loader import SafeLoader
+import streamlit_authenticator as stauth
 
 # Import agency components
 from deep_research_agent import DeepResearchAgent, ResearchFindings
@@ -25,6 +28,41 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Authentication Configuration
+credentials = {
+    'usernames': {
+        'rudram': {
+            'email': 'rudram.startup@gmail.com',
+            'name': 'Surendran Manoharan',
+            'password': '$2b$12$lII2ktQTh05qKVowh5OiBeygqgFnJPWAQ1RIbszbnmgONDJiaGE12'  # Suren9234!
+        }
+    }
+}
+
+# Create authenticator
+authenticator = stauth.Authenticate(
+    credentials,
+    'tech_consultancy_app',  # cookie name
+    'viseyyon_secret_key_2026',  # cookie key
+    30  # cookie expiry days
+)
+
+# Login widget
+name, authentication_status, username = authenticator.login('Login', 'main')
+
+# Handle authentication
+if authentication_status == False:
+    st.error('Username/Password is incorrect')
+    st.stop()
+elif authentication_status == None:
+    st.warning('Please enter your username and password')
+    st.info('**Username:** rudram | **Password:** Suren9234!')
+    st.stop()
+
+# User is authenticated - show logout button
+authenticator.logout('Logout', 'sidebar')
+st.sidebar.success(f'Welcome **{name}**!')
 
 # Custom CSS
 st.markdown("""
