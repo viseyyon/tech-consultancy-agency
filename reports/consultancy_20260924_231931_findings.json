@@ -1,0 +1,19 @@
+{
+  "url": "https://github.com/anthropics/anthropic-sdk-python",
+  "source_type": "github_repo",
+  "purpose": "Analysis of github_repo",
+  "technology": [],
+  "stars": 0,
+  "forks": 0,
+  "features": [],
+  "code_samples": [],
+  "community_metrics": {
+    "contributors": 0,
+    "commits": 0,
+    "issues": 0
+  },
+  "last_updated": "2026-09-24",
+  "confidence": 0.85,
+  "flags": [],
+  "error": null
+}
