@@ -209,6 +209,16 @@ tags: [repositories, index]
             (success, message)
         """
         try:
+            # Check if running on Streamlit Cloud or other read-only environment
+            is_cloud = os.getenv('STREAMLIT_RUNTIME_ENV') or \
+                      os.path.exists('/mount/src') or \
+                      os.getenv('HOME') == '/home/appuser'
+
+            if is_cloud:
+                logger.info("Running on cloud platform (read-only git) - skipping git sync")
+                logger.info("Note will be synced by local cron job within 5 minutes")
+                return True, "Skipped (cloud environment - local sync handles this)"
+
             # Determine git directory
             if vault_as_repo:
                 git_dir = self.vault_path
