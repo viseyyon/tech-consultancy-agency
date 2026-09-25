@@ -111,47 +111,58 @@ class DeepResearchAgent:
         else:
             return 'unknown'
 
-    def fetch_with_retry(self, url: str) -> tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+    def fetch_with_retry(self, url: str) -> tuple[bool, Optional[str], Optional[str]]:
         """
-        Fetch URL with exponential backoff retry
+        Fetch URL content with exponential backoff retry
 
-        Returns: (success, data, error_message)
+        Returns: (success, html_content, error_message)
         """
+        try:
+            import urllib.request
+            import urllib.error
+        except ImportError:
+            return False, None, "urllib not available"
+
         for attempt in range(self.MAX_RETRIES):
             try:
                 logger.info(f"Fetching URL (attempt {attempt + 1}/{self.MAX_RETRIES}): {url}")
 
-                # Import WebFetch tool (assume available in environment)
-                # In real implementation, use actual HTTP client or tool
-                # For demo, simulate fetch
+                # Fetch actual HTML content
+                req = urllib.request.Request(
+                    url,
+                    headers={'User-Agent': 'Mozilla/5.0 (TechConsultancyBot/1.0)'}
+                )
 
-                # Placeholder for actual fetch logic
-                # In production: use requests library or WebFetch tool
-                data = {
-                    'url': url,
-                    'fetched_at': time.strftime('%Y-%m-%d %H:%M:%S'),
-                    'status': 'success'
-                }
+                with urllib.request.urlopen(req, timeout=self.TIMEOUT_SECONDS) as response:
+                    html_content = response.read().decode('utf-8')
 
-                logger.info(f"Successfully fetched: {url}")
-                return True, data, None
+                logger.info(f"Successfully fetched: {url} ({len(html_content)} bytes)")
+                return True, html_content, None
+
+            except urllib.error.HTTPError as e:
+                error_msg = f"HTTP {e.code}: {e.reason}"
+                logger.warning(f"Fetch attempt {attempt + 1} failed: {error_msg}")
+
+                if e.code == 404:
+                    return False, None, "Repository not found (404)"
+                elif e.code == 403:
+                    return False, None, "Access forbidden (403) - possible rate limit"
 
             except Exception as e:
                 error_msg = f"Fetch attempt {attempt + 1} failed: {str(e)}"
                 logger.warning(error_msg)
 
-                if attempt < self.MAX_RETRIES - 1:
-                    # Exponential backoff: 2s, 4s, 8s
-                    delay = 2 ** (attempt + 1)
-                    logger.info(f"Retrying in {delay} seconds...")
-                    time.sleep(delay)
-                else:
-                    return False, None, error_msg
+            if attempt < self.MAX_RETRIES - 1:
+                delay = 2 ** (attempt + 1)
+                logger.info(f"Retrying in {delay} seconds...")
+                time.sleep(delay)
+            else:
+                return False, None, "Max retries exceeded"
 
         return False, None, "Max retries exceeded"
 
-    def extract_github_metadata(self, url: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Extract metadata from GitHub repository"""
+    def extract_github_metadata(self, url: str, html_content: str) -> Dict[str, Any]:
+        """Extract metadata from GitHub repository HTML"""
         # Parse GitHub URL
         match = re.search(r'github\.com/([^/]+)/([^/]+)', url)
         if not match:
@@ -160,16 +171,54 @@ class DeepResearchAgent:
         owner, repo = match.groups()
         repo = repo.replace('.git', '')
 
-        # In production: call GitHub API
-        # For demo: return structure
-        return {
+        metadata = {
             'owner': owner,
             'repo': repo,
-            'stars': 0,  # Fetch from API
-            'forks': 0,  # Fetch from API
-            'language': 'Python',  # Fetch from API
-            'topics': []  # Fetch from API
+            'stars': 0,
+            'forks': 0,
+            'language': '',
+            'topics': [],
+            'description': ''
         }
+
+        if not html_content:
+            return metadata
+
+        try:
+            # Extract stars (e.g., <span id="repo-stars-counter-star" ... >1,234</span>)
+            stars_match = re.search(r'id="repo-stars-counter-star"[^>]*>([0-9,\.k]+)</span>', html_content)
+            if stars_match:
+                stars_str = stars_match.group(1).replace(',', '').replace('k', '000').replace('.', '')
+                metadata['stars'] = int(float(stars_str)) if stars_str.replace('.', '').isdigit() else 0
+
+            # Extract forks (e.g., <span id="repo-network-counter" ... >123</span>)
+            forks_match = re.search(r'id="repo-network-counter"[^>]*>([0-9,\.k]+)</span>', html_content)
+            if forks_match:
+                forks_str = forks_match.group(1).replace(',', '').replace('k', '000').replace('.', '')
+                metadata['forks'] = int(float(forks_str)) if forks_str.replace('.', '').isdigit() else 0
+
+            # Extract description
+            desc_match = re.search(r'<p class="f4 my-3">([^<]+)</p>', html_content)
+            if not desc_match:
+                desc_match = re.search(r'name="description" content="([^"]+)"', html_content)
+            if desc_match:
+                metadata['description'] = desc_match.group(1).strip()
+
+            # Extract primary language
+            lang_match = re.search(r'<span itemprop="programmingLanguage">([^<]+)</span>', html_content)
+            if lang_match:
+                metadata['language'] = lang_match.group(1).strip()
+
+            # Extract topics/tags
+            topics = re.findall(r'topic-tag[^>]*>([^<]+)<', html_content)
+            metadata['topics'] = [t.strip() for t in topics[:10]]  # Limit to 10
+
+            logger.info(f"Extracted: {metadata['stars']} stars, {metadata['forks']} forks, {len(metadata['topics'])} topics")
+
+        except Exception as e:
+            logger.warning(f"Failed to parse GitHub metadata: {e}")
+
+        return metadata
 
     def analyze_url(self, url: str) -> ResearchFindings:
         """
@@ -209,7 +258,7 @@ class DeepResearchAgent:
         logger.info(f"Detected source type: {source_type}")
 
         # Step 3: Fetch content with retry
-        success, data, error = self.fetch_with_retry(url)
+        success, html_content, error = self.fetch_with_retry(url)
         if not success:
             logger.error(f"Fetch failed: {error}")
             return ResearchFindings(
@@ -230,18 +279,27 @@ class DeepResearchAgent:
 
         # Step 4: Extract metadata based on source type
         if source_type == 'github_repo':
-            metadata = self.extract_github_metadata(url, data)
+            metadata = self.extract_github_metadata(url, html_content)
         else:
             metadata = {}
+
+        # Build technology list from language + topics
+        technology = []
+        if metadata.get('language'):
+            technology.append(metadata['language'])
+        technology.extend(metadata.get('topics', []))
+
+        # Use description or fallback
+        purpose = metadata.get('description') or f"GitHub repository: {metadata.get('repo', 'unknown')}"
 
         # Step 5: Build findings
         findings = ResearchFindings(
             url=url,
             source_type=source_type,
-            purpose=f"Analysis of {source_type}",  # Extract from README
-            technology=metadata.get('topics', []),
-            stars=metadata.get('stars'),
-            forks=metadata.get('forks'),
+            purpose=purpose,
+            technology=technology[:10],  # Limit to 10 items
+            stars=metadata.get('stars', 0),
+            forks=metadata.get('forks', 0),
             features=[],  # Parse from README
             code_samples=[],  # Extract code blocks
             community_metrics={

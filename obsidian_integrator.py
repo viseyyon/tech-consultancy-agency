@@ -22,9 +22,28 @@ logger = logging.getLogger(__name__)
 class ObsidianIntegrator:
     """Manages Obsidian vault updates"""
 
-    def __init__(self, vault_path: str = "~/Documents/Obsidian Vault"):
-        self.vault_path = Path(vault_path).expanduser()
-        self.knowledge_path = self.vault_path / "10-knowledge"
+    def __init__(self, vault_path: str = None):
+        # Auto-detect vault path based on environment
+        if vault_path is None:
+            # Try local path first (for local development)
+            local_path = Path("~/Documents/Obsidian Vault/10-knowledge").expanduser()
+            # Cloud path (Streamlit Cloud, Hugging Face, etc.)
+            cloud_path = Path("obsidian_vault")
+
+            if local_path.exists():
+                self.vault_path = local_path.parent
+                self.knowledge_path = local_path
+            elif cloud_path.exists():
+                self.vault_path = cloud_path
+                self.knowledge_path = cloud_path
+            else:
+                # Default to cloud path (create if needed)
+                self.vault_path = cloud_path
+                self.knowledge_path = cloud_path
+        else:
+            self.vault_path = Path(vault_path).expanduser()
+            self.knowledge_path = self.vault_path / "10-knowledge" if (self.vault_path / "10-knowledge").exists() else self.vault_path
+
         self.tech_radar_path = self.vault_path / "Tech Radar.md"
         logger.info(f"Obsidian Integrator initialized - Vault: {self.vault_path}")
 
