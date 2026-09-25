@@ -178,12 +178,84 @@ with tab2:
 
     if st.button("Start Analysis", type="primary"):
         if url:
+            if not COMPONENTS_AVAILABLE:
+                st.error(f"Analysis components unavailable: {COMPONENT_ERROR}")
+                st.stop()
+
             with st.spinner("🤖 Multi-agent system analyzing..."):
-                st.info("Analysis feature will be available once all components are verified")
-                st.session_state.analysis_history.append({
-                    'repo_name': url.split('/')[-1],
-                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M')
-                })
+                try:
+                    # Initialize orchestrator
+                    orchestrator = ConsultancyOrchestrator()
+
+                    # Validate URL
+                    valid, error_msg = orchestrator.validate_input(url)
+                    if not valid:
+                        st.error(f"Invalid URL: {error_msg}")
+                        st.stop()
+
+                    # Run analysis pipeline
+                    st.info("🔍 Stage 1/5: Deep Research Agent")
+                    results = orchestrator.run_pipeline(url)
+
+                    # Check for errors
+                    if results.get('status') == 'failed':
+                        st.error(f"Analysis failed: {results.get('error', 'Unknown error')}")
+                        st.stop()
+
+                    # Get research findings
+                    research = results['stages'].get('research', {})
+                    findings = research.get('findings', {})
+
+                    # Display results
+                    st.success("✅ Analysis complete!")
+
+                    # Repository info
+                    st.markdown("### 📊 Repository Analysis")
+                    col1, col2, col3 = st.columns(3)
+
+                    with col1:
+                        st.metric("⭐ Stars", findings.get('stars', 'N/A'))
+                    with col2:
+                        st.metric("🍴 Forks", findings.get('forks', 'N/A'))
+                    with col3:
+                        st.metric("📈 Confidence", f"{findings.get('confidence', 0):.0%}")
+
+                    # Technology stack
+                    if findings.get('technology'):
+                        st.markdown("### 🔧 Technology Stack")
+                        tech_cols = st.columns(min(len(findings['technology']), 4))
+                        for idx, tech in enumerate(findings['technology'][:4]):
+                            with tech_cols[idx % 4]:
+                                st.info(tech)
+
+                    # Purpose
+                    if findings.get('purpose'):
+                        st.markdown("### 🎯 Purpose")
+                        st.write(findings['purpose'])
+
+                    # Features
+                    if findings.get('features'):
+                        st.markdown("### ✨ Key Features")
+                        for feature in findings['features'][:5]:
+                            st.markdown(f"- {feature}")
+
+                    # Save to history
+                    st.session_state.analysis_history.append({
+                        'repo_name': url.split('/')[-1],
+                        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M'),
+                        'stars': findings.get('stars', 0),
+                        'technology': findings.get('technology', [])
+                    })
+
+                    # Note about vault sync
+                    st.markdown("---")
+                    st.info("📝 Analysis saved to Obsidian vault. Will sync to GitHub within 5 minutes.")
+
+                except Exception as e:
+                    st.error(f"Analysis error: {str(e)}")
+                    import traceback
+                    with st.expander("🔍 Error Details"):
+                        st.code(traceback.format_exc())
         else:
             st.warning("Please enter a valid URL")
 
