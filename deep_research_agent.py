@@ -204,16 +204,59 @@ class DeepResearchAgent:
             if desc_match:
                 metadata['description'] = desc_match.group(1).strip()
 
-            # Extract primary language
-            lang_match = re.search(r'<span itemprop="programmingLanguage">([^<]+)</span>', html_content)
-            if lang_match:
-                metadata['language'] = lang_match.group(1).strip()
+            # Extract primary language (multiple patterns)
+            lang_patterns = [
+                r'<span itemprop="programmingLanguage">([^<]+)</span>',
+                r'aria-label="([A-Za-z\+\#]+)\s+[0-9\.]+\s*%',  # From language bar
+                r'>([A-Za-z\+\#]+)</span>\s*<span[^>]*>[0-9\.]+%</span>',  # Adjacent to percentage
+            ]
 
-            # Extract topics/tags
-            topics = re.findall(r'topic-tag[^>]*>([^<]+)<', html_content)
-            metadata['topics'] = [t.strip() for t in topics[:10]]  # Limit to 10
+            for pattern in lang_patterns:
+                lang_match = re.search(pattern, html_content)
+                if lang_match:
+                    metadata['language'] = lang_match.group(1).strip()
+                    break
 
-            logger.info(f"Extracted: {metadata['stars']} stars, {metadata['forks']} forks, {len(metadata['topics'])} topics")
+            # Extract topics/tags (improved pattern)
+            topic_patterns = [
+                r'<a[^>]*href="/topics/[^"]*"[^>]*>([^<]+)</a>',  # Primary pattern
+                r'topic-tag[^>]*>([^<]+)<',  # Fallback pattern
+                r'data-octo-click="topic"[^>]*>([^<]+)<',  # Alternative
+            ]
+
+            all_topics = []
+            for pattern in topic_patterns:
+                topics = re.findall(pattern, html_content)
+                all_topics.extend([t.strip() for t in topics if t.strip()])
+
+            # Remove duplicates while preserving order
+            seen = set()
+            unique_topics = []
+            for topic in all_topics:
+                if topic.lower() not in seen:
+                    seen.add(topic.lower())
+                    unique_topics.append(topic)
+
+            metadata['topics'] = unique_topics[:10]  # Limit to 10
+
+            # Extract key features from README (if present in HTML)
+            features = []
+
+            # Look for bullet points or list items in README
+            readme_lists = re.findall(r'<li[^>]*>([^<]+(?:<[^>]+>[^<]+</[^>]+>)*[^<]*)</li>', html_content)
+            for item in readme_lists[:20]:  # Check first 20 list items
+                # Clean HTML tags
+                clean_item = re.sub(r'<[^>]+>', '', item).strip()
+                # Keep items that look like features (not too short, not navigation)
+                if (20 < len(clean_item) < 200 and
+                    not clean_item.lower().startswith(('code of conduct', 'license', 'readme', 'security'))):
+                    features.append(clean_item)
+                    if len(features) >= 5:  # Limit to 5 features
+                        break
+
+            metadata['features'] = features
+
+            logger.info(f"Extracted: {metadata['stars']} stars, {metadata['forks']} forks, {len(metadata['topics'])} topics, {len(features)} features, language={metadata['language']}")
 
         except Exception as e:
             logger.warning(f"Failed to parse GitHub metadata: {e}")
@@ -300,15 +343,15 @@ class DeepResearchAgent:
             technology=technology[:10],  # Limit to 10 items
             stars=metadata.get('stars', 0),
             forks=metadata.get('forks', 0),
-            features=[],  # Parse from README
-            code_samples=[],  # Extract code blocks
+            features=metadata.get('features', []),  # Extracted from README
+            code_samples=[],  # Could be extracted later
             community_metrics={
-                'contributors': 0,  # From API
-                'commits': 0,  # From API
-                'issues': 0  # From API
+                'stars': metadata.get('stars', 0),
+                'forks': metadata.get('forks', 0),
+                'topics': len(metadata.get('topics', []))
             },
             last_updated=time.strftime('%Y-%m-%d'),
-            confidence=0.85,
+            confidence=0.85 if metadata.get('stars', 0) > 0 else 0.60,  # Higher confidence with real data
             flags=['active_development'] if metadata.get('stars', 0) > 100 else []
         )
 
