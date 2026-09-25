@@ -57,10 +57,50 @@ class ObsidianIntegrator:
         return True, ""
 
     def create_repository_note(self, findings: Dict[str, Any]) -> str:
-        """Create Obsidian note for repository"""
+        """Create or update Obsidian note for repository"""
         url = findings['url']
         repo_name = url.split('/')[-1].replace('.git', '')
+        note_path = self.knowledge_path / f"{repo_name}.md"
 
+        # Check if note already exists
+        if note_path.exists():
+            logger.info(f"Note exists, updating: {note_path}")
+            # Read existing note
+            existing_content = note_path.read_text()
+
+            # Update frontmatter fields
+            import re
+
+            # Update stars
+            existing_content = re.sub(
+                r'stars: \d+',
+                f"stars: {findings.get('stars', 0)}",
+                existing_content
+            )
+
+            # Update analyzed_date
+            existing_content = re.sub(
+                r'analyzed_date: [0-9-]+',
+                f"analyzed_date: {findings['last_updated']}",
+                existing_content
+            )
+
+            # Update last generated date at bottom
+            existing_content = re.sub(
+                r'\*\*Date\*\*: [0-9 :-]+',
+                f"**Date**: {datetime.now().strftime('%Y-%m-%d %H:%M')} (updated)",
+                existing_content
+            )
+
+            try:
+                note_path.write_text(existing_content)
+                logger.info(f"Updated existing note: {note_path}")
+                return str(note_path)
+            except Exception as e:
+                logger.error(f"Failed to update note: {e}")
+                return ""
+
+        # Create new note
         # Build frontmatter
         frontmatter = f"""---
 title: {repo_name}
@@ -104,7 +144,7 @@ tags: [repository, analysis, {', '.join(findings.get('technology', [])[:3])}]
 
 - **Stars**: {findings.get('stars', 0)}
 - **Forks**: {findings.get('forks', 0)}
-- **Contributors**: {findings.get('community_metrics', {}).get('contributors', 0)}
+- **Topics**: {len(findings.get('technology', []))}
 
 ## Integration Opportunities
 
@@ -129,7 +169,6 @@ tags: [repository, analysis, {', '.join(findings.get('technology', [])[:3])}]
 """
 
         note_content = frontmatter + content
-        note_path = self.knowledge_path / f"{repo_name}.md"
 
         try:
             note_path.write_text(note_content)
