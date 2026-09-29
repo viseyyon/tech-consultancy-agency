@@ -163,18 +163,102 @@ with tab1:
     with col4:
         st.metric("Status", "🟢 Active")
 
-    st.markdown("### Recent Activity")
+    st.markdown("### 📋 Recently Analyzed Repositories (Last 2 Days)")
+
+    # Get recent analyses from vault
+    try:
+        from pathlib import Path
+        import re
+        from datetime import datetime, timedelta
+
+        # Check main Obsidian vault first, then fallback to local
+        main_vault = Path.home() / "Documents" / "Obsidian Vault" / "10-knowledge"
+        local_vault = Path("obsidian_vault")
+
+        vault_path = main_vault if main_vault.exists() else local_vault
+
+        if vault_path.exists():
+            # Calculate cutoff time (48 hours ago)
+            cutoff_time = time.time() - (2 * 24 * 60 * 60)
+
+            # Get all markdown files with their modification times
+            md_files = []
+            for md_file in vault_path.glob("*.md"):
+                try:
+                    # Check if modified in last 2 days
+                    mtime = md_file.stat().st_mtime
+                    if mtime < cutoff_time:
+                        continue
+
+                    content = md_file.read_text()
+                    # Extract metadata
+                    url_match = re.search(r'url: (https://[^\n]+)', content)
+                    stars_match = re.search(r'stars: (\d+)', content)
+                    date_match = re.search(r'analyzed_date: ([0-9-]+)', content)
+                    tech_match = re.findall(r'^- (.+)$', content.split('## Technology Stack')[1].split('##')[0], re.MULTILINE) if '## Technology Stack' in content else []
+
+                    if url_match:
+                        # Calculate hours ago
+                        hours_ago = (time.time() - mtime) / 3600
+                        time_str = f"{int(hours_ago)}h ago" if hours_ago < 24 else f"{int(hours_ago/24)}d ago"
+
+                        md_files.append({
+                            'name': md_file.stem,
+                            'url': url_match.group(1),
+                            'stars': int(stars_match.group(1)) if stars_match else 0,
+                            'date': date_match.group(1) if date_match else 'N/A',
+                            'tech': tech_match[:3],
+                            'mtime': mtime,
+                            'time_ago': time_str
+                        })
+                except Exception as e:
+                    continue
+
+            # Sort by modification time (most recent first)
+            md_files.sort(key=lambda x: x['mtime'], reverse=True)
+
+            # Display all from last 2 days
+            if md_files:
+                st.info(f"Found {len(md_files)} repositories analyzed in the last 48 hours")
+                for repo in md_files:
+                    col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
+                    with col1:
+                        st.markdown(f"**{repo['name']}**")
+                        if repo['tech']:
+                            st.caption(f"🔧 {', '.join(repo['tech'])}")
+                    with col2:
+                        st.metric("⭐", repo['stars'], label_visibility="collapsed")
+                    with col3:
+                        st.caption(f"🕐 {repo['time_ago']}")
+                    with col4:
+                        if st.button("🔄", key=f"reanalyze_{repo['name']}", help="Re-analyze"):
+                            st.session_state['reanalyze_url'] = repo['url']
+                            st.rerun()
+                    st.markdown("---")
+            else:
+                st.info("No repositories analyzed in the last 2 days. Start analyzing to see them here!")
+        else:
+            st.info("Vault not found. Analyses will appear here after the first run.")
+    except Exception as e:
+        st.warning(f"Could not load recent analyses: {str(e)}")
+
+    # Show session history if available
     if st.session_state.analysis_history:
+        st.markdown("### 📝 This Session")
         for analysis in st.session_state.analysis_history[-5:]:
             st.markdown(f"- **{analysis.get('repo_name', 'Unknown')}** - {analysis.get('timestamp', 'N/A')}")
-    else:
-        st.info("No analyses yet. Start by analyzing a repository!")
 
 with tab2:
     st.header("🔍 Analyze Repository")
     st.markdown("Enter a GitHub or GitLab repository URL to analyze")
 
-    url = st.text_input("Repository URL", placeholder="https://github.com/username/repo")
+    # Check if re-analyzing from dashboard
+    default_url = ""
+    if 'reanalyze_url' in st.session_state:
+        default_url = st.session_state['reanalyze_url']
+        del st.session_state['reanalyze_url']
+
+    url = st.text_input("Repository URL", value=default_url, placeholder="https://github.com/username/repo")
 
     if st.button("Start Analysis", type="primary"):
         if url:
