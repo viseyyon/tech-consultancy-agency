@@ -56,52 +56,22 @@ class ObsidianIntegrator:
             self.knowledge_path.mkdir(parents=True, exist_ok=True)
         return True, ""
 
-    def create_repository_note(self, findings: Dict[str, Any]) -> str:
-        """Create or update Obsidian note for repository"""
+    def create_repository_note(self, findings: Dict[str, Any]) -> tuple[str, bool]:
+        """Create or update Obsidian note for repository (complete rewrite)
+
+        Returns:
+            tuple[str, bool]: (note_path, is_update)
+        """
         url = findings['url']
         repo_name = url.split('/')[-1].replace('.git', '')
         note_path = self.knowledge_path / f"{repo_name}.md"
 
-        # Check if note already exists
-        if note_path.exists():
-            logger.info(f"Note exists, updating: {note_path}")
-            # Read existing note
-            existing_content = note_path.read_text()
+        # Check if note already exists (for logging only)
+        is_update = note_path.exists()
+        if is_update:
+            logger.info(f"Note exists, performing complete rewrite: {note_path}")
 
-            # Update frontmatter fields
-            import re
-
-            # Update stars
-            existing_content = re.sub(
-                r'stars: \d+',
-                f"stars: {findings.get('stars', 0)}",
-                existing_content
-            )
-
-            # Update analyzed_date
-            existing_content = re.sub(
-                r'analyzed_date: [0-9-]+',
-                f"analyzed_date: {findings['last_updated']}",
-                existing_content
-            )
-
-            # Update last generated date at bottom
-            existing_content = re.sub(
-                r'\*\*Date\*\*: [0-9 :-]+',
-                f"**Date**: {datetime.now().strftime('%Y-%m-%d %H:%M')} (updated)",
-                existing_content
-            )
-
-            try:
-                note_path.write_text(existing_content)
-                logger.info(f"Updated existing note: {note_path}")
-                return str(note_path)
-            except Exception as e:
-                logger.error(f"Failed to update note: {e}")
-                return ""
-
-        # Create new note
-        # Build frontmatter
+        # Build frontmatter (same for create and update)
         frontmatter = f"""---
 title: {repo_name}
 url: {url}
@@ -172,11 +142,13 @@ tags: [repository, analysis, {', '.join(findings.get('technology', [])[:3])}]
 
         try:
             note_path.write_text(note_content)
-            logger.info(f"Created note: {note_path}")
-            return str(note_path)
+            action = "Updated" if is_update else "Created"
+            logger.info(f"{action} note: {note_path}")
+            return str(note_path), is_update
         except Exception as e:
-            logger.error(f"Failed to create note: {e}")
-            return ""
+            action = "update" if is_update else "create"
+            logger.error(f"Failed to {action} note: {e}")
+            return "", False
 
     def update_tech_radar(self, findings: Dict[str, Any], ring: str = "ASSESS"):
         """Add entry to Tech Radar"""
@@ -351,8 +323,8 @@ tags: [repositories, index]
             logger.error(f"Validation failed: {error}")
             return {'success': False, 'error': error}
 
-        # Create note
-        note_path = self.create_repository_note(findings)
+        # Create or update note
+        note_path, is_update = self.create_repository_note(findings)
 
         # Update radar
         self.update_tech_radar(findings)
@@ -366,10 +338,12 @@ tags: [repositories, index]
 
         logger.info("=== Obsidian integration complete ===")
 
+        action = 'note_updated' if is_update else 'note_created'
         result = {
             'success': True,
             'note_path': note_path,
-            'updates': ['note_created', 'radar_updated', 'index_updated']
+            'is_update': is_update,
+            'updates': [action, 'radar_updated', 'index_updated']
         }
 
         if sync_success:

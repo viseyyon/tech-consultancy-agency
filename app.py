@@ -249,7 +249,12 @@ with tab2:
 
                     # Note about vault sync
                     st.markdown("---")
-                    st.info("📝 Analysis saved to Obsidian vault. Will sync to GitHub within 5 minutes.")
+                    obsidian_result = results.get('obsidian', {})
+                    if obsidian_result.get('is_update'):
+                        st.success("🔄 Analysis updated in Obsidian vault with latest data!")
+                    else:
+                        st.success("📝 New analysis saved to Obsidian vault!")
+                    st.info("Will sync to GitHub within 5 minutes.")
 
                 except Exception as e:
                     st.error(f"Analysis error: {str(e)}")
