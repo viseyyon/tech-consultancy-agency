@@ -143,44 +143,245 @@ class ConsultancyOrchestrator:
         return results
 
     def assess_technology(self, findings: ResearchFindings) -> Dict[str, Any]:
-        """Technology Assessor Agent logic"""
+        """Technology Assessor Agent - Intelligent assessment based on real data"""
+
+        # Calculate maturity score (1-10) based on stars, forks, and tech stack
+        stars = findings.stars
+        forks = findings.forks
+        tech_count = len(findings.technology)
+
+        # Maturity scoring algorithm
+        maturity = 0
+        if stars >= 1000: maturity += 3
+        elif stars >= 100: maturity += 2
+        elif stars >= 10: maturity += 1
+
+        if forks >= 100: maturity += 2
+        elif forks >= 20: maturity += 1
+
+        if tech_count >= 8: maturity += 2
+        elif tech_count >= 5: maturity += 1
+
+        if len(findings.features) >= 5: maturity += 2
+        elif len(findings.features) >= 3: maturity += 1
+
+        maturity_score = min(maturity, 10)
+
+        # Assess code quality based on community engagement
+        star_fork_ratio = forks / max(stars, 1)
+        if star_fork_ratio > 0.3:
+            code_quality = 'excellent'
+        elif star_fork_ratio > 0.1:
+            code_quality = 'good'
+        elif star_fork_ratio > 0.05:
+            code_quality = 'fair'
+        else:
+            code_quality = 'needs_review'
+
+        # Infer architecture from tech stack
+        tech_lower = [t.lower() for t in findings.technology]
+        if any(t in tech_lower for t in ['kubernetes', 'docker', 'microservices']):
+            architecture = 'microservices'
+        elif any(t in tech_lower for t in ['monolith', 'rails', 'django']):
+            architecture = 'monolithic'
+        elif any(t in tech_lower for t in ['serverless', 'lambda', 'functions']):
+            architecture = 'serverless'
+        else:
+            architecture = 'standard'
+
+        # Identify risks based on tech stack and metrics
+        risks = []
+        if tech_count > 15:
+            risks.append('high_complexity_stack')
+        if stars < 50:
+            risks.append('low_community_adoption')
+        if forks < 5:
+            risks.append('limited_maintenance_capacity')
+        if not findings.features:
+            risks.append('documentation_gaps')
+
         return {
             'status': 'complete',
-            'maturity_score': 7,  # 1-10 scale
+            'maturity_score': maturity_score,
             'tech_stack': findings.technology,
-            'risks': ['dependency_management', 'documentation_gaps'],
-            'architecture': 'microservices',  # Inferred
-            'code_quality': 'good'  # Based on stars/activity
+            'tech_count': tech_count,
+            'risks': risks if risks else ['minimal_risks'],
+            'architecture': architecture,
+            'code_quality': code_quality,
+            'star_fork_ratio': round(star_fork_ratio, 3),
+            'assessment_basis': {
+                'stars': stars,
+                'forks': forks,
+                'tech_items': tech_count,
+                'features': len(findings.features)
+            }
         }
 
     def analyze_business_value(self, findings: ResearchFindings, tech_assessment: Dict) -> Dict[str, Any]:
-        """Business Value Analyzer Agent logic"""
+        """Business Value Analyzer - Data-driven ROI and use case analysis"""
+
+        # Extract use cases from features and description
+        use_cases = []
+        if findings.features:
+            # Use actual features as use cases
+            use_cases = [f.split('.')[0].strip() for f in findings.features[:5]]
+        else:
+            # Infer from technology stack
+            tech_lower = [t.lower() for t in findings.technology]
+            if any(t in tech_lower for t in ['docker', 'kubernetes', 'deployment']):
+                use_cases.append('Infrastructure automation and orchestration')
+            if any(t in tech_lower for t in ['api', 'rest', 'graphql']):
+                use_cases.append('API integration and service connectivity')
+            if any(t in tech_lower for t in ['ml', 'ai', 'machine-learning']):
+                use_cases.append('AI/ML model deployment and optimization')
+            if any(t in tech_lower for t in ['security', 'auth', 'encryption']):
+                use_cases.append('Security enhancement and access control')
+
+        if not use_cases:
+            use_cases = ['General development automation', 'Team productivity enhancement']
+
+        # Calculate ROI based on stars and maturity
+        stars = findings.stars
+        maturity = tech_assessment['maturity_score']
+
+        # ROI estimation algorithm
+        # High stars + high maturity = high value
+        if stars >= 1000 and maturity >= 7:
+            cost_savings = '$5000-10000/quarter'
+            efficiency_gain = '60-80%'
+            payback_period = '1-2 months'
+            competitive_position = 'Market Leader'
+        elif stars >= 500 and maturity >= 6:
+            cost_savings = '$3000-5000/quarter'
+            efficiency_gain = '40-60%'
+            payback_period = '2-3 months'
+            competitive_position = 'Strong'
+        elif stars >= 100 and maturity >= 5:
+            cost_savings = '$1500-3000/quarter'
+            efficiency_gain = '30-40%'
+            payback_period = '3-4 months'
+            competitive_position = 'Competitive'
+        elif stars >= 50:
+            cost_savings = '$500-1500/quarter'
+            efficiency_gain = '20-30%'
+            payback_period = '4-6 months'
+            competitive_position = 'Emerging'
+        else:
+            cost_savings = '$200-500/quarter'
+            efficiency_gain = '10-20%'
+            payback_period = '6-12 months'
+            competitive_position = 'Experimental'
+
+        # Calculate adoption score
+        adoption_score = min(10, int((stars / 100) * 2 + maturity / 2))
+
         return {
             'status': 'complete',
-            'use_cases': [
-                'Infrastructure automation',
-                'Agent enhancement',
-                'Cost optimization'
-            ],
+            'use_cases': use_cases,
             'roi_estimate': {
-                'cost_savings': '$2000-3000/quarter',
-                'efficiency_gain': '40%',
-                'payback_period': '2-3 months'
+                'cost_savings': cost_savings,
+                'efficiency_gain': efficiency_gain,
+                'payback_period': payback_period,
+                'adoption_score': adoption_score
             },
-            'competitive_position': 'Strong'
+            'competitive_position': competitive_position,
+            'market_validation': {
+                'stars': stars,
+                'community_size': 'large' if stars > 1000 else 'medium' if stars > 100 else 'small',
+                'adoption_trend': 'proven' if stars > 500 else 'growing' if stars > 50 else 'early'
+            }
         }
 
     def plan_integration(self, findings: ResearchFindings, tech: Dict, business: Dict) -> Dict[str, Any]:
-        """Integration Strategist Agent logic"""
+        """Integration Strategist - Smart integration planning based on stack and complexity"""
+
+        tech_stack = findings.technology
+        tech_lower = [t.lower() for t in tech_stack]
+        maturity = tech['maturity_score']
+        tech_count = len(tech_stack)
+
+        # Identify integration points based on actual tech stack
+        integration_points = {}
+
+        # API/Service integration
+        if any(t in tech_lower for t in ['api', 'rest', 'graphql', 'http']):
+            integration_points['API Integration'] = 'REST/GraphQL endpoints via HTTP client'
+
+        # Container/Infrastructure integration
+        if any(t in tech_lower for t in ['docker', 'kubernetes', 'containerization']):
+            integration_points['Infrastructure'] = 'Docker containerization and Kubernetes orchestration'
+
+        # Database integration
+        if any(t in tech_lower for t in ['database', 'sql', 'postgres', 'mysql', 'mongodb']):
+            integration_points['Data Layer'] = 'Database connectivity and ORM integration'
+
+        # Authentication integration
+        if any(t in tech_lower for t in ['auth', 'oauth', 'security', 'jwt', 'oidc', 'openid-connect']):
+            integration_points['Authentication'] = 'OAuth/OIDC authentication flow integration'
+
+        # CLI/Automation integration
+        if any(t in tech_lower for t in ['cli', 'command-line', 'automation', 'script']):
+            integration_points['Automation'] = 'CLI integration and workflow automation'
+
+        # AI/ML integration
+        if any(t in tech_lower for t in ['ai', 'ml', 'machine-learning', 'llm', 'neural']):
+            integration_points['AI/ML'] = 'Model inference and training pipeline integration'
+
+        # Default integration if none detected
+        if not integration_points:
+            integration_points = {
+                'Direct Integration': 'Library import and API usage',
+                'Agent Enhancement': 'Extend existing agent capabilities'
+            }
+
+        # Calculate effort estimate based on complexity
+        complexity_score = 0
+        complexity_score += tech_count / 2  # More tech = more complexity
+        complexity_score += (10 - maturity)  # Lower maturity = more effort
+        complexity_score += len(tech['risks'])  # More risks = more effort
+
+        if complexity_score <= 3:
+            effort_estimate = '1-2 weeks'
+            complexity_level = 'Low'
+        elif complexity_score <= 6:
+            effort_estimate = '2-4 weeks'
+            complexity_level = 'Medium'
+        elif complexity_score <= 10:
+            effort_estimate = '4-8 weeks'
+            complexity_level = 'High'
+        else:
+            effort_estimate = '8-12 weeks'
+            complexity_level = 'Very High'
+
+        # Rollout phases based on maturity and risks
+        if maturity >= 7 and len(tech['risks']) <= 2:
+            rollout_phases = ['Quick Pilot', 'Production']
+        elif maturity >= 5:
+            rollout_phases = ['Pilot', 'Staging', 'Production']
+        else:
+            rollout_phases = ['Research', 'Prototype', 'Pilot', 'Staging', 'Production']
+
+        # Prerequisites based on tech stack
+        prerequisites = []
+        if any(t in tech_lower for t in ['docker', 'kubernetes']):
+            prerequisites.append('Container runtime environment')
+        if any(t in tech_lower for t in ['database', 'sql']):
+            prerequisites.append('Database infrastructure')
+        if any(t in tech_lower for t in ['auth', 'oauth']):
+            prerequisites.append('Authentication provider setup')
+
         return {
             'status': 'complete',
-            'integration_points': {
-                'SSH Bridge': 'Direct integration via MCP',
-                'Quad-Agency': 'Agent library augmentation',
-                'AI Council': 'Model endpoint addition'
-            },
-            'effort_estimate': '2-4 weeks',
-            'rollout_phases': ['Pilot', 'Staging', 'Production']
+            'integration_points': integration_points,
+            'effort_estimate': effort_estimate,
+            'complexity_level': complexity_level,
+            'rollout_phases': rollout_phases,
+            'prerequisites': prerequisites if prerequisites else ['Standard development environment'],
+            'integration_readiness': {
+                'maturity': maturity,
+                'risk_count': len(tech['risks']),
+                'complexity_score': round(complexity_score, 1)
+            }
         }
 
     def generate_report(self, results: Dict[str, Any]) -> Path:
